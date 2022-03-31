@@ -1,5 +1,4 @@
-//go:build !libsecp256k1_sdk
-// +build !libsecp256k1_sdk
+// +build !libsecp256k1
 
 package secp256k1
 

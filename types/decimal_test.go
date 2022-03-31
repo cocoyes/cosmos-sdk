@@ -7,9 +7,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"sigs.k8s.io/yaml"
+	"gopkg.in/yaml.v2"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
@@ -22,29 +21,6 @@ func TestDecimalTestSuite(t *testing.T) {
 	suite.Run(t, new(decimalTestSuite))
 }
 
-func TestDecApproxEq(t *testing.T) {
-	// d1 = 0.55, d2 = 0.6, tol = 0.1
-	d1 := sdk.NewDecWithPrec(55, 2)
-	d2 := sdk.NewDecWithPrec(6, 1)
-	tol := sdk.NewDecWithPrec(1, 1)
-
-	require.True(sdk.DecApproxEq(t, d1, d2, tol))
-
-	// d1 = 0.55, d2 = 0.6, tol = 1E-5
-	d1 = sdk.NewDecWithPrec(55, 2)
-	d2 = sdk.NewDecWithPrec(6, 1)
-	tol = sdk.NewDecWithPrec(1, 5)
-
-	require.False(sdk.DecApproxEq(t, d1, d2, tol))
-
-	// d1 = 0.6, d2 = 0.61, tol = 0.01
-	d1 = sdk.NewDecWithPrec(6, 1)
-	d2 = sdk.NewDecWithPrec(61, 2)
-	tol = sdk.NewDecWithPrec(1, 2)
-
-	require.True(sdk.DecApproxEq(t, d1, d2, tol))
-}
-
 // create a decimal from a decimal string (ex. "1234.5678")
 func (s *decimalTestSuite) mustNewDecFromStr(str string) (d sdk.Dec) {
 	d, err := sdk.NewDecFromStr(str)
@@ -54,14 +30,8 @@ func (s *decimalTestSuite) mustNewDecFromStr(str string) (d sdk.Dec) {
 }
 
 func (s *decimalTestSuite) TestNewDecFromStr() {
-	largeBigInt, ok := new(big.Int).SetString("3144605511029693144278234343371835", 10)
-	s.Require().True(ok)
-
-	largerBigInt, ok := new(big.Int).SetString("88888888888888888888888888888888888888888888888888888888888888888888844444440", 10)
-	s.Require().True(ok)
-
-	largestBigInt, ok := new(big.Int).SetString("133499189745056880149688856635597007162669032647290798121690100488888732861290034376435130433535", 10)
-	s.Require().True(ok)
+	largeBigInt, success := new(big.Int).SetString("3144605511029693144278234343371835", 10)
+	s.Require().True(success)
 
 	tests := []struct {
 		decimalStr string
@@ -87,9 +57,7 @@ func (s *decimalTestSuite) TestNewDecFromStr() {
 		{"foobar", true, sdk.Dec{}},
 		{"0.foobar", true, sdk.Dec{}},
 		{"0.foobar.", true, sdk.Dec{}},
-		{"88888888888888888888888888888888888888888888888888888888888888888888844444440", false, sdk.NewDecFromBigInt(largerBigInt)},
-		{"133499189745056880149688856635597007162669032647290798121690100488888732861290.034376435130433535", false, sdk.NewDecFromBigIntWithPrec(largestBigInt, 18)},
-		{"133499189745056880149688856635597007162669032647290798121690100488888732861291", true, sdk.Dec{}},
+		{"88888888888888888888888888888888888888888888888888888888888888888888844444440", true, sdk.Dec{}},
 	}
 
 	for tcIndex, tc := range tests {
@@ -384,7 +352,6 @@ func (s *decimalTestSuite) TestPower() {
 		power    uint64
 		expected sdk.Dec
 	}{
-		{sdk.NewDec(100), 0, sdk.OneDec()},                                                 // 10 ^ (0) => 1.0
 		{sdk.OneDec(), 10, sdk.OneDec()},                                                   // 1.0 ^ (10) => 1.0
 		{sdk.NewDecWithPrec(5, 1), 2, sdk.NewDecWithPrec(25, 2)},                           // 0.5 ^ 2 => 0.25
 		{sdk.NewDecWithPrec(2, 1), 2, sdk.NewDecWithPrec(4, 2)},                            // 0.2 ^ 2 => 0.04
@@ -395,13 +362,7 @@ func (s *decimalTestSuite) TestPower() {
 
 	for i, tc := range testCases {
 		res := tc.input.Power(tc.power)
-		s.Require().True(tc.expected.Sub(res).Abs().LTE(sdk.SmallestDec()), "unexpected result for test case %d, normal power, input: %v", i, tc.input)
-
-		mutableInput := tc.input
-		mutableInput.PowerMut(tc.power)
-		s.Require().True(tc.expected.Sub(mutableInput).Abs().LTE(sdk.SmallestDec()),
-			"unexpected result for test case %d, input %v", i, tc.input)
-		s.Require().True(res.Equal(tc.input), "unexpected result for test case %d, mutable power, input: %v", i, tc.input)
+		s.Require().True(tc.expected.Sub(res).Abs().LTE(sdk.SmallestDec()), "unexpected result for test case %d, input: %v", i, tc.input)
 	}
 }
 
@@ -480,12 +441,6 @@ func (s *decimalTestSuite) TestDecSortableBytes() {
 }
 
 func (s *decimalTestSuite) TestDecEncoding() {
-	largestBigInt, ok := new(big.Int).SetString("133499189745056880149688856635597007162669032647290798121690100488888732861290034376435130433535", 10)
-	s.Require().True(ok)
-
-	smallestBigInt, ok := new(big.Int).SetString("-133499189745056880149688856635597007162669032647290798121690100488888732861290034376435130433535", 10)
-	s.Require().True(ok)
-
 	testCases := []struct {
 		input   sdk.Dec
 		rawBz   string
@@ -520,18 +475,6 @@ func (s *decimalTestSuite) TestDecEncoding() {
 			"2D31343134323133353632333733303935303439",
 			"\"-1.414213562373095049\"",
 			"\"-1.414213562373095049\"\n",
-		},
-		{
-			sdk.NewDecFromBigIntWithPrec(largestBigInt, 18),
-			"313333343939313839373435303536383830313439363838383536363335353937303037313632363639303332363437323930373938313231363930313030343838383838373332383631323930303334333736343335313330343333353335",
-			"\"133499189745056880149688856635597007162669032647290798121690100488888732861290.034376435130433535\"",
-			"\"133499189745056880149688856635597007162669032647290798121690100488888732861290.034376435130433535\"\n",
-		},
-		{
-			sdk.NewDecFromBigIntWithPrec(smallestBigInt, 18),
-			"2D313333343939313839373435303536383830313439363838383536363335353937303037313632363639303332363437323930373938313231363930313030343838383838373332383631323930303334333736343335313330343333353335",
-			"\"-133499189745056880149688856635597007162669032647290798121690100488888732861290.034376435130433535\"",
-			"\"-133499189745056880149688856635597007162669032647290798121690100488888732861290.034376435130433535\"\n",
 		},
 	}
 

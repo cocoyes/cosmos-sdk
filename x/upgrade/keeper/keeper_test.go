@@ -9,10 +9,9 @@ import (
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 
 	"github.com/cosmos/cosmos-sdk/simapp"
+	store "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/cosmos/cosmos-sdk/x/upgrade/keeper"
 	"github.com/cosmos/cosmos-sdk/x/upgrade/types"
 )
@@ -23,16 +22,13 @@ type KeeperTestSuite struct {
 	homeDir string
 	app     *simapp.SimApp
 	ctx     sdk.Context
-	msgSrvr types.MsgServer
-	addrs   []sdk.AccAddress
 }
 
 func (s *KeeperTestSuite) SetupTest() {
-	app := simapp.Setup(s.T(), false)
+	app := simapp.Setup(false)
 	homeDir := filepath.Join(s.T().TempDir(), "x_upgrade_keeper_test")
 	app.UpgradeKeeper = keeper.NewKeeper( // recreate keeper in order to use a custom home path
 		make(map[int64]bool), app.GetKey(types.StoreKey), app.AppCodec(), homeDir, app.BaseApp,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 	s.T().Log("home dir:", homeDir)
 	s.homeDir = homeDir
@@ -41,8 +37,6 @@ func (s *KeeperTestSuite) SetupTest() {
 		Time:   time.Now(),
 		Height: 10,
 	})
-	s.msgSrvr = keeper.NewMsgServerImpl(s.app.UpgradeKeeper)
-	s.addrs = simapp.AddTestAddrsIncremental(app, s.ctx, 1, sdk.NewInt(30000000))
 }
 
 func (s *KeeperTestSuite) TestReadUpgradeInfoFromDisk() {
@@ -50,17 +44,16 @@ func (s *KeeperTestSuite) TestReadUpgradeInfoFromDisk() {
 	_, err := s.app.UpgradeKeeper.ReadUpgradeInfoFromDisk()
 	s.Require().NoError(err)
 
-	expected := types.Plan{
+	expected := store.UpgradeInfo{
 		Name:   "test_upgrade",
 		Height: 100,
 	}
 
 	// create an upgrade info file
-	s.Require().NoError(s.app.UpgradeKeeper.DumpUpgradeInfoToDisk(101, expected))
+	s.Require().NoError(s.app.UpgradeKeeper.DumpUpgradeInfoToDisk(expected.Height, expected.Name))
 
 	ui, err := s.app.UpgradeKeeper.ReadUpgradeInfoFromDisk()
 	s.Require().NoError(err)
-	expected.Height = 101
 	s.Require().Equal(expected, ui)
 }
 

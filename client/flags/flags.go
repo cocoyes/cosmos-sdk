@@ -35,8 +35,6 @@ const (
 	SignModeDirect = "direct"
 	// SignModeLegacyAminoJSON is the value of the --sign-mode flag for SIGN_MODE_LEGACY_AMINO_JSON
 	SignModeLegacyAminoJSON = "amino-json"
-	// SignModeDirectAux is the value of the --sign-mode flag for SIGN_MODE_DIRECT_AUX
-	SignModeDirectAux = "direct-aux"
 )
 
 // List of CLI flags
@@ -72,11 +70,8 @@ const (
 	FlagCountTotal       = "count-total"
 	FlagTimeoutHeight    = "timeout-height"
 	FlagKeyAlgorithm     = "algo"
-	FlagFeePayer         = "fee-payer"
-	FlagFeeGranter       = "fee-granter"
+	FlagFeeAccount       = "fee-account"
 	FlagReverse          = "reverse"
-	FlagTip              = "tip"
-	FlagAux              = "aux"
 
 	// Tendermint logging flags
 	FlagLogLevel  = "log_level"
@@ -112,18 +107,17 @@ func AddTxFlagsToCmd(cmd *cobra.Command) {
 	cmd.Flags().StringP(FlagBroadcastMode, "b", BroadcastSync, "Transaction broadcasting mode (sync|async|block)")
 	cmd.Flags().Bool(FlagDryRun, false, "ignore the --gas flag and perform a simulation of a transaction, but don't broadcast it")
 	cmd.Flags().Bool(FlagGenerateOnly, false, "Build an unsigned transaction and write it to STDOUT (when enabled, the local Keybase is not accessible)")
-	cmd.Flags().Bool(FlagOffline, false, "Offline mode (does not allow any online functionality)")
+	cmd.Flags().Bool(FlagOffline, false, "Offline mode (does not allow any online functionality")
 	cmd.Flags().BoolP(FlagSkipConfirmation, "y", false, "Skip tx broadcasting prompt confirmation")
 	cmd.Flags().String(FlagKeyringBackend, DefaultKeyringBackend, "Select keyring's backend (os|file|kwallet|pass|test|memory)")
-	cmd.Flags().String(FlagSignMode, "", "Choose sign mode (direct|amino-json|direct-aux), this is an advanced feature")
+	cmd.Flags().String(FlagSignMode, "", "Choose sign mode (direct|amino-json), this is an advanced feature")
 	cmd.Flags().Uint64(FlagTimeoutHeight, 0, "Set a block timeout height to prevent the tx from being committed past a certain height")
-	cmd.Flags().String(FlagFeePayer, "", "Fee payer pays fees for the transaction instead of deducting from the signer")
-	cmd.Flags().String(FlagFeeGranter, "", "Fee granter grants fees for the transaction")
-	cmd.Flags().String(FlagTip, "", "Tip is the amount that is going to be transferred to the fee payer on the target chain. This flag is only valid when used with --aux")
-	cmd.Flags().Bool(FlagAux, false, "Generate aux signer data instead of sending a tx")
+	cmd.Flags().String(FlagFeeAccount, "", "Fee account pays fees for the transaction instead of deducting from the signer")
 
 	// --gas can accept integers and "auto"
 	cmd.Flags().String(FlagGas, "", fmt.Sprintf("gas limit to set per-transaction; set to %q to calculate sufficient gas automatically (default %d)", GasFlagAuto, DefaultGasLimit))
+
+	cmd.MarkFlagRequired(FlagChainID)
 }
 
 // AddPaginationFlagsToCmd adds common pagination flags to cmd

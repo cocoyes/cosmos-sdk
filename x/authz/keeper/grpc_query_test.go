@@ -8,13 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/types/query"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 )
 
 func (suite *TestSuite) TestGRPCQueryAuthorization() {
-	queryClient, addrs := suite.queryClient, suite.addrs
+	app, ctx, queryClient, addrs := suite.app, suite.ctx, suite.queryClient, suite.addrs
 	var (
 		req              *authz.QueryGrantsRequest
 		expAuthorization authz.Authorization
@@ -52,13 +51,17 @@ func (suite *TestSuite) TestGRPCQueryAuthorization() {
 					MsgTypeUrl: "unknown",
 				}
 			},
-			"authorization not found for unknown type",
+			"no authorization found for unknown type",
 			func(require *require.Assertions, res *authz.QueryGrantsResponse) {},
 		},
 		{
 			"Success",
 			func(require *require.Assertions) {
-				expAuthorization = suite.createSendAuthorization(addrs[0], addrs[1])
+				now := ctx.BlockHeader().Time
+				newCoins := sdk.NewCoins(sdk.NewInt64Coin("steak", 100))
+				expAuthorization = &banktypes.SendAuthorization{SpendLimit: newCoins}
+				err := app.AuthzKeeper.SaveGrant(ctx, addrs[0], addrs[1], expAuthorization, now.Add(time.Hour))
+				require.NoError(err)
 				req = &authz.QueryGrantsRequest{
 					Granter:    addrs[1].String(),
 					Grantee:    addrs[0].String(),
@@ -93,7 +96,7 @@ func (suite *TestSuite) TestGRPCQueryAuthorization() {
 }
 
 func (suite *TestSuite) TestGRPCQueryAuthorizations() {
-	queryClient, addrs := suite.queryClient, suite.addrs
+	app, ctx, queryClient, addrs := suite.app, suite.ctx, suite.queryClient, suite.addrs
 	var (
 		req              *authz.QueryGrantsRequest
 		expAuthorization authz.Authorization
@@ -125,7 +128,11 @@ func (suite *TestSuite) TestGRPCQueryAuthorizations() {
 		{
 			"Success",
 			func() {
-				expAuthorization = suite.createSendAuthorization(addrs[0], addrs[1])
+				now := ctx.BlockHeader().Time
+				newCoins := sdk.NewCoins(sdk.NewInt64Coin("steak", 100))
+				expAuthorization = &banktypes.SendAuthorization{SpendLimit: newCoins}
+				err := app.AuthzKeeper.SaveGrant(ctx, addrs[0], addrs[1], expAuthorization, now.Add(time.Hour))
+				suite.Require().NoError(err)
 				req = &authz.QueryGrantsRequest{
 					Granter: addrs[1].String(),
 					Grantee: addrs[0].String(),
@@ -154,149 +161,4 @@ func (suite *TestSuite) TestGRPCQueryAuthorizations() {
 			testCase.postTest(result)
 		})
 	}
-}
-
-func (suite *TestSuite) TestGRPCQueryGranterGrants() {
-	require := suite.Require()
-	queryClient, addrs := suite.queryClient, suite.addrs
-
-	testCases := []struct {
-		msg      string
-		preRun   func()
-		expError bool
-		request  authz.QueryGranterGrantsRequest
-		numItems int
-	}{
-		{
-			"fail invalid granter addr",
-			func() {},
-			true,
-			authz.QueryGranterGrantsRequest{},
-			0,
-		},
-		{
-			"valid case, single authorization",
-			func() {
-				suite.createSendAuthorization(addrs[1], addrs[0])
-			},
-			false,
-			authz.QueryGranterGrantsRequest{
-				Granter: addrs[0].String(),
-			},
-			1,
-		},
-		{
-			"valid case, multiple authorization",
-			func() {
-				suite.createSendAuthorization(addrs[2], addrs[0])
-			},
-			false,
-			authz.QueryGranterGrantsRequest{
-				Granter: addrs[0].String(),
-			},
-			2,
-		},
-		{
-			"valid case, pagination",
-			func() {},
-			false,
-			authz.QueryGranterGrantsRequest{
-				Granter: addrs[0].String(),
-				Pagination: &query.PageRequest{
-					Limit: 1,
-				},
-			},
-			1,
-		},
-	}
-
-	for _, tc := range testCases {
-		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
-			tc.preRun()
-			result, err := queryClient.GranterGrants(gocontext.Background(), &tc.request)
-			if tc.expError {
-				require.Error(err)
-			} else {
-				require.NoError(err)
-				require.Len(result.Grants, tc.numItems)
-			}
-		})
-	}
-}
-
-func (suite *TestSuite) TestGRPCQueryGranteeGrants() {
-	require := suite.Require()
-	queryClient, addrs := suite.queryClient, suite.addrs
-
-	testCases := []struct {
-		msg      string
-		preRun   func()
-		expError bool
-		request  authz.QueryGranteeGrantsRequest
-		numItems int
-	}{
-		{
-			"fail invalid granter addr",
-			func() {},
-			true,
-			authz.QueryGranteeGrantsRequest{},
-			0,
-		},
-		{
-			"valid case, single authorization",
-			func() {
-				suite.createSendAuthorization(addrs[0], addrs[1])
-			},
-			false,
-			authz.QueryGranteeGrantsRequest{
-				Grantee: addrs[0].String(),
-			},
-			1,
-		},
-		{
-			"valid case, multiple authorization",
-			func() {
-				suite.createSendAuthorization(addrs[0], addrs[2])
-			},
-			false,
-			authz.QueryGranteeGrantsRequest{
-				Grantee: addrs[0].String(),
-			},
-			2,
-		},
-		{
-			"valid case, pagination",
-			func() {},
-			false,
-			authz.QueryGranteeGrantsRequest{
-				Grantee: addrs[0].String(),
-				Pagination: &query.PageRequest{
-					Limit: 1,
-				},
-			},
-			1,
-		},
-	}
-
-	for _, tc := range testCases {
-		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
-			tc.preRun()
-			result, err := queryClient.GranteeGrants(gocontext.Background(), &tc.request)
-			if tc.expError {
-				require.Error(err)
-			} else {
-				require.NoError(err)
-				require.Len(result.Grants, tc.numItems)
-			}
-		})
-	}
-}
-
-func (suite *TestSuite) createSendAuthorization(a1, a2 sdk.AccAddress) authz.Authorization {
-	exp := suite.ctx.BlockHeader().Time.Add(time.Hour)
-	newCoins := sdk.NewCoins(sdk.NewInt64Coin("steak", 100))
-	authorization := &banktypes.SendAuthorization{SpendLimit: newCoins}
-	err := suite.app.AuthzKeeper.SaveGrant(suite.ctx, a1, a2, authorization, &exp)
-	suite.Require().NoError(err)
-	return authorization
 }

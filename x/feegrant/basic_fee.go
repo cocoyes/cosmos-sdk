@@ -1,8 +1,6 @@
 package feegrant
 
 import (
-	time "time"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 )
@@ -53,8 +51,4 @@ func (a BasicAllowance) ValidateBasic() error {
 	}
 
 	return nil
-}
-
-func (a BasicAllowance) ExpiresAt() (*time.Time, error) {
-	return a.Expiration, nil
 }

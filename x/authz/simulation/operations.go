@@ -1,8 +1,10 @@
 package simulation
 
 import (
+	"fmt"
 	"math/rand"
-	"time"
+
+	"github.com/gogo/protobuf/proto"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -10,10 +12,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/simapp/helpers"
 	simappparams "github.com/cosmos/cosmos-sdk/simapp/params"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	"github.com/cosmos/cosmos-sdk/x/authz"
+
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/authz/keeper"
+
 	banktype "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/cosmos/cosmos-sdk/x/simulation"
 )
@@ -45,19 +49,13 @@ func WeightedOperations(
 
 	var (
 		weightMsgGrant int
-		weightExec     int
 		weightRevoke   int
+		weightExec     int
 	)
 
 	appParams.GetOrGenerate(cdc, OpWeightMsgGrant, &weightMsgGrant, nil,
 		func(_ *rand.Rand) {
 			weightMsgGrant = WeightGrant
-		},
-	)
-
-	appParams.GetOrGenerate(cdc, OpWeightExec, &weightExec, nil,
-		func(_ *rand.Rand) {
-			weightExec = WeightExec
 		},
 	)
 
@@ -67,18 +65,24 @@ func WeightedOperations(
 		},
 	)
 
+	appParams.GetOrGenerate(cdc, OpWeightExec, &weightExec, nil,
+		func(_ *rand.Rand) {
+			weightExec = WeightExec
+		},
+	)
+
 	return simulation.WeightedOperations{
 		simulation.NewWeightedOperation(
 			weightMsgGrant,
 			SimulateMsgGrant(ak, bk, k),
 		),
 		simulation.NewWeightedOperation(
-			weightExec,
-			SimulateMsgExec(ak, bk, k, appCdc),
-		),
-		simulation.NewWeightedOperation(
 			weightRevoke,
 			SimulateMsgRevoke(ak, bk, k),
+		),
+		simulation.NewWeightedOperation(
+			weightExec,
+			SimulateMsgExec(ak, bk, k, appCdc),
 		),
 	}
 }
@@ -107,11 +111,7 @@ func SimulateMsgGrant(ak authz.AccountKeeper, bk authz.BankKeeper, _ keeper.Keep
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgGrant, "spend limit is nil"), nil, nil
 		}
 
-		var expiration *time.Time
-		t1 := simtypes.RandTimestamp(r)
-		if !t1.Before(ctx.BlockTime()) {
-			expiration = &t1
-		}
+		expiration := ctx.BlockTime().AddDate(1, 0, 0)
 		msg, err := authz.NewMsgGrant(granter.Address, grantee.Address, generateRandomAuthorization(r, spendLimit), expiration)
 		if err != nil {
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgGrant, err.Error()), nil, err
@@ -131,7 +131,7 @@ func SimulateMsgGrant(ak authz.AccountKeeper, bk authz.BankKeeper, _ keeper.Keep
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgGrant, "unable to generate mock tx"), nil, err
 		}
 
-		_, _, err = app.SimDeliver(txCfg.TxEncoder(), tx)
+		_, _, err = app.Deliver(txCfg.TxEncoder(), tx)
 		if err != nil {
 			return simtypes.NoOpMsg(authz.ModuleName, sdk.MsgTypeURL(msg), "unable to deliver tx"), nil, err
 		}
@@ -179,11 +179,7 @@ func SimulateMsgRevoke(ak authz.AccountKeeper, bk authz.BankKeeper, k keeper.Kee
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgRevoke, "fee error"), nil, err
 		}
 
-		a, err := grant.GetAuthorization()
-		if err != nil {
-			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgRevoke, "authorization error"), nil, err
-		}
-
+		a := grant.GetAuthorization()
 		msg := authz.NewMsgRevoke(granterAddr, granteeAddr, a.MsgTypeURL())
 		txCfg := simappparams.MakeTestEncodingConfig().TxConfig
 		account := ak.GetAccount(ctx, granterAddr)
@@ -201,9 +197,9 @@ func SimulateMsgRevoke(ak authz.AccountKeeper, bk authz.BankKeeper, k keeper.Kee
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgRevoke, err.Error()), nil, err
 		}
 
-		_, _, err = app.SimDeliver(txCfg.TxEncoder(), tx)
+		_, _, err = app.Deliver(txCfg.TxEncoder(), tx)
 		if err != nil {
-			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgRevoke, "unable to execute tx: "+err.Error()), nil, err
+			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgRevoke, "unable to deliver tx"), nil, err
 		}
 
 		return simtypes.NewOperationMsg(&msg, true, "", nil), nil, nil
@@ -215,27 +211,19 @@ func SimulateMsgExec(ak authz.AccountKeeper, bk authz.BankKeeper, k keeper.Keepe
 	return func(
 		r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
+		hasGrant := false
+		var targetGrant authz.Grant
 		var granterAddr sdk.AccAddress
 		var granteeAddr sdk.AccAddress
-		var sendAuth *banktype.SendAuthorization
-		var err error
 		k.IterateGrants(ctx, func(granter, grantee sdk.AccAddress, grant authz.Grant) bool {
+			targetGrant = grant
 			granterAddr = granter
 			granteeAddr = grantee
-			var a authz.Authorization
-			a, err = grant.GetAuthorization()
-			if err != nil {
-				return true
-			}
-			var ok bool
-			sendAuth, ok = a.(*banktype.SendAuthorization)
-			return ok
+			hasGrant = true
+			return true
 		})
 
-		if err != nil {
-			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, err.Error()), nil, err
-		}
-		if sendAuth == nil {
+		if !hasGrant {
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, "no grant found"), nil, nil
 		}
 
@@ -248,37 +236,42 @@ func SimulateMsgExec(ak authz.AccountKeeper, bk authz.BankKeeper, k keeper.Keepe
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgRevoke, "Account not found"), nil, sdkerrors.Wrapf(sdkerrors.ErrNotFound, "granter account not found")
 		}
 
-		granterspendableCoins := bk.SpendableCoins(ctx, granterAddr)
-		coins := simtypes.RandSubsetCoins(r, granterspendableCoins)
+		if targetGrant.Expiration.Before(ctx.BlockHeader().Time) {
+			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, "grant expired"), nil, nil
+		}
+
+		coins := sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(int64(simtypes.RandIntBetween(r, 100, 1000000)))))
 
 		// Check send_enabled status of each sent coin denom
 		if err := bk.IsSendEnabledCoins(ctx, coins...); err != nil {
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, err.Error()), nil, nil
 		}
 
-		msg := []sdk.Msg{banktype.NewMsgSend(granterAddr, granteeAddr, coins)}
-
-		_, err = sendAuth.Accept(ctx, msg[0])
-		if err != nil {
-			if sdkerrors.ErrInsufficientFunds.Is(err) {
-				return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, err.Error()), nil, nil
-			} else {
-				return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, err.Error()), nil, err
+		if targetGrant.Authorization.TypeUrl == fmt.Sprintf("/%s", proto.MessageName(&banktype.SendAuthorization{})) {
+			sendAuthorization := targetGrant.GetAuthorization().(*banktype.SendAuthorization)
+			if sendAuthorization.SpendLimit.IsAllLT(coins) {
+				return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, "over spend limit"), nil, nil
 			}
 		}
 
-		msgExec := authz.NewMsgExec(granteeAddr, msg)
+		granterspendableCoins := bk.SpendableCoins(ctx, granterAddr)
+		if granterspendableCoins.IsAllLTE(coins) {
+			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, "insufficient funds"), nil, nil
+		}
+
 		granteeSpendableCoins := bk.SpendableCoins(ctx, granteeAddr)
 		fees, err := simtypes.RandomFees(r, ctx, granteeSpendableCoins)
 		if err != nil {
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, "fee error"), nil, err
 		}
 
+		msg := authz.NewMsgExec(granteeAddr, []sdk.Msg{banktype.NewMsgSend(granterAddr, granteeAddr, coins)})
 		txCfg := simappparams.MakeTestEncodingConfig().TxConfig
 		granteeAcc := ak.GetAccount(ctx, granteeAddr)
+
 		tx, err := helpers.GenTx(
 			txCfg,
-			[]sdk.Msg{&msgExec},
+			[]sdk.Msg{&msg},
 			fees,
 			helpers.DefaultGenTxGas,
 			chainID,
@@ -290,15 +283,15 @@ func SimulateMsgExec(ak authz.AccountKeeper, bk authz.BankKeeper, k keeper.Keepe
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, err.Error()), nil, err
 		}
 
-		_, _, err = app.SimDeliver(txCfg.TxEncoder(), tx)
+		_, _, err = app.Deliver(txCfg.TxEncoder(), tx)
 		if err != nil {
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, err.Error()), nil, err
 		}
 
-		err = msgExec.UnpackInterfaces(cdc)
+		err = msg.UnpackInterfaces(cdc)
 		if err != nil {
 			return simtypes.NoOpMsg(authz.ModuleName, TypeMsgExec, "unmarshal error"), nil, err
 		}
-		return simtypes.NewOperationMsg(&msgExec, true, "success", nil), nil, nil
+		return simtypes.NewOperationMsg(&msg, true, "success", nil), nil, nil
 	}
 }

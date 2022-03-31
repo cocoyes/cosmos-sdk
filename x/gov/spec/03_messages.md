@@ -9,22 +9,20 @@ order: 3
 Proposals can be submitted by any account via a `MsgSubmitProposal`
 transaction.
 
-+++ https://github.com/cosmos/cosmos-sdk/blob/ab9545527d630fe38761aa61cc5c95eabd68e0e6/proto/cosmos/gov/v1beta2/tx.proto#L34-L44
++++ https://github.com/cosmos/cosmos-sdk/blob/v0.40.0/proto/cosmos/gov/v1beta1/tx.proto#L24-L39
 
-All `sdk.Msgs` passed into the `messages` field of a `MsgSubmitProposal` message
-must be registered in the app's `MsgServiceRouter`. Each of these messages must
-have one signer, namely the gov module account. And finally, the metadata length
-must not be larger than the `maxMetadataLen` config passed into the gov keeper.
+The `Content` of a `MsgSubmitProposal` message must have an appropriate router
+set in the governance module.
 
 **State modifications:**
 
-* Generate new `proposalID`
-* Create new `Proposal`
-* Initialise `Proposal`'s attributes
-* Decrease balance of sender by `InitialDeposit`
-* If `MinDeposit` is reached:
-    * Push `proposalID` in `ProposalProcessingQueue`
-* Transfer `InitialDeposit` from the `Proposer` to the governance `ModuleAccount`
+- Generate new `proposalID`
+- Create new `Proposal`
+- Initialise `Proposals` attributes
+- Decrease balance of sender by `InitialDeposit`
+- If `MinDeposit` is reached:
+    - Push `proposalID` in `ProposalProcessingQueue`
+- Transfer `InitialDeposit` from the `Proposer` to the governance `ModuleAccount`
 
 A `MsgSubmitProposal` transaction can be handled according to the following
 pseudocode.
@@ -36,9 +34,7 @@ pseudocode.
 upon receiving txGovSubmitProposal from sender do
 
   if !correctlyFormatted(txGovSubmitProposal)
-    // check if proposal is correctly formatted and the messages have routes to other modules. Includes fee payment.
-    // check if all messages' unique Signer is the gov acct.
-    // check if the metadata is not too long.
+    // check if proposal is correctly formatted. Includes fee payment.
     throw
 
   initialDeposit = txGovSubmitProposal.InitialDeposit
@@ -55,8 +51,9 @@ upon receiving txGovSubmitProposal from sender do
   proposalID = generate new proposalID
   proposal = NewProposal()
 
-  proposal.Messages = txGovSubmitProposal.Messages
-  proposal.Metadata = txGovSubmitProposal.Metadata
+  proposal.Title = txGovSubmitProposal.Title
+  proposal.Description = txGovSubmitProposal.Description
+  proposal.Type = txGovSubmitProposal.Type
   proposal.TotalDeposit = initialDeposit
   proposal.SubmitTime = <CurrentTime>
   proposal.DepositEndTime = <CurrentTime>.Add(depositParam.MaxDepositPeriod)
@@ -82,12 +79,12 @@ Once a proposal is submitted, if
 
 **State modifications:**
 
-* Decrease balance of sender by `deposit`
-* Add `deposit` of sender in `proposal.Deposits`
-* Increase `proposal.TotalDeposit` by sender's `deposit`
-* If `MinDeposit` is reached:
-    * Push `proposalID` in `ProposalProcessingQueueEnd`
-* Transfer `Deposit` from the `proposer` to the governance `ModuleAccount`
+- Decrease balance of sender by `deposit`
+- Add `deposit` of sender in `proposal.Deposits`
+- Increase `proposal.TotalDeposit` by sender's `deposit`
+- If `MinDeposit` is reached:
+    - Push `proposalID` in `ProposalProcessingQueueEnd`
+- Transfer `Deposit` from the `proposer` to the governance `ModuleAccount`
 
 A `MsgDeposit` transaction has to go through a number of checks to be valid.
 These checks are outlined in the following pseudocode.
@@ -148,9 +145,9 @@ vote on the proposal.
 
 **State modifications:**
 
-* Record `Vote` of sender
+- Record `Vote` of sender
 
-_Note: Gas cost for this message has to take into account the future tallying of the vote in EndBlocker._
+_Note: Gas cost for this message has to take into account the future tallying of the vote in EndBlocker_
 
 Next is a pseudocode outline of the way `MsgVote` transactions are
 handled:

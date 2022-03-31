@@ -50,6 +50,13 @@ type StoreUpgrades struct {
 	Deleted []string      `json:"deleted"`
 }
 
+// UpgradeInfo defines height and name of the upgrade
+// to ensure multistore upgrades happen only at matching height.
+type UpgradeInfo struct {
+	Name   string `json:"name"`
+	Height int64  `json:"height"`
+}
+
 // StoreRename defines a name change of a sub-store.
 // All data previously under a PrefixStore with OldKey will be copied
 // to a PrefixStore with NewKey, then deleted from OldKey store.
@@ -189,8 +196,10 @@ type CommitMultiStore interface {
 //---------subsp-------------------------------
 // KVStore
 
-// BasicKVStore is a simple interface to get/set data
-type BasicKVStore interface {
+// KVStore is a simple interface to get/set data
+type KVStore interface {
+	Store
+
 	// Get returns nil iff key doesn't exist. Panics on nil key.
 	Get(key []byte) []byte
 
@@ -202,12 +211,6 @@ type BasicKVStore interface {
 
 	// Delete deletes the key. Panics on nil key.
 	Delete(key []byte)
-}
-
-// KVStore additionally provides iteration and deletion
-type KVStore interface {
-	Store
-	BasicKVStore
 
 	// Iterator over a domain of keys in ascending order. End is exclusive.
 	// Start must be less than end, or the Iterator is invalid.
@@ -296,8 +299,6 @@ const (
 	StoreTypeIAVL
 	StoreTypeTransient
 	StoreTypeMemory
-	StoreTypeSMT
-	StoreTypePersistent
 )
 
 func (st StoreType) String() string {
@@ -316,12 +317,6 @@ func (st StoreType) String() string {
 
 	case StoreTypeMemory:
 		return "StoreTypeMemory"
-
-	case StoreTypeSMT:
-		return "StoreTypeSMT"
-
-	case StoreTypePersistent:
-		return "StoreTypePersistent"
 	}
 
 	return "unknown store type"

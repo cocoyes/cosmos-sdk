@@ -5,6 +5,7 @@ import (
 	"io"
 	"sort"
 	"sync"
+	"time"
 
 	dbm "github.com/tendermint/tm-db"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/store/listenkv"
 	"github.com/cosmos/cosmos-sdk/store/tracekv"
 	"github.com/cosmos/cosmos-sdk/store/types"
+	"github.com/cosmos/cosmos-sdk/telemetry"
 	"github.com/cosmos/cosmos-sdk/types/kv"
 )
 
@@ -89,6 +91,7 @@ func (store *Store) Has(key []byte) bool {
 func (store *Store) Delete(key []byte) {
 	store.mtx.Lock()
 	defer store.mtx.Unlock()
+	defer telemetry.MeasureSince(time.Now(), "store", "cachekv", "delete")
 
 	types.AssertValidKey(key)
 	store.setCacheValue(key, nil, true, true)
@@ -98,6 +101,7 @@ func (store *Store) Delete(key []byte) {
 func (store *Store) Write() {
 	store.mtx.Lock()
 	defer store.mtx.Unlock()
+	defer telemetry.MeasureSince(time.Now(), "store", "cachekv", "write")
 
 	// We need a copy of all of the keys.
 	// Not the best, but probably not a bottleneck depending.
@@ -377,7 +381,7 @@ func (store *Store) setCacheValue(key, value []byte, deleted bool, dirty bool) {
 		delete(store.deleted, keyStr)
 	}
 	if dirty {
-		store.unsortedCache[keyStr] = struct{}{}
+		store.unsortedCache[conv.UnsafeBytesToStr(key)] = struct{}{}
 	}
 }
 

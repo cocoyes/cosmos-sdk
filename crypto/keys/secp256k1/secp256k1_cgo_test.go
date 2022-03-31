@@ -1,5 +1,4 @@
-//go:build libsecp256k1_sdk
-// +build libsecp256k1_sdk
+// +build libsecp256k1
 
 package secp256k1
 
@@ -21,7 +20,7 @@ func TestPrivKeySecp256k1SignVerify(t *testing.T) {
 		wantVerifyPasses bool
 	}{
 		{name: "valid sign-verify round", privKey: priv, wantSignErr: false, wantVerifyPasses: true},
-		{name: "invalid private key", privKey: &PrivKey{Key: []byte{}}, wantSignErr: true, wantVerifyPasses: false},
+		{name: "invalid private key", privKey: &*PrivKey{Key: [32]byte{}}, wantSignErr: true, wantVerifyPasses: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -35,7 +34,7 @@ func TestPrivKeySecp256k1SignVerify(t *testing.T) {
 			require.NotNil(t, got)
 
 			pub := tt.privKey.PubKey()
-			assert.Equal(t, tt.wantVerifyPasses, pub.VerifySignature(msg, got))
+			assert.Equal(t, tt.wantVerifyPasses, pub.VerifyBytes(msg, got))
 		})
 	}
 }

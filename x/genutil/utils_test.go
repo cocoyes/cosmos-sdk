@@ -7,9 +7,6 @@ import (
 	"testing"
 	"time"
 
-	tmed25519 "github.com/tendermint/tendermint/crypto/ed25519"
-	"github.com/tendermint/tendermint/privval"
-
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/config"
 )
@@ -60,13 +57,6 @@ func TestInitializeNodeValidatorFilesFromMnemonic(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-
-				if tt.mnemonic != "" {
-					actualPVFile, _ := privval.LoadFilePV(cfg.PrivValidator.KeyFile(), cfg.PrivValidator.StateFile())
-					expectedPrivateKey := tmed25519.GenPrivKeyFromSecret([]byte(tt.mnemonic))
-					expectedFile := privval.NewFilePV(expectedPrivateKey, cfg.PrivValidator.KeyFile(), cfg.PrivValidator.StateFile())
-					require.Equal(t, expectedFile, actualPVFile)
-				}
 			}
 		})
 	}

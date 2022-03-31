@@ -17,21 +17,14 @@ func (k Keeper) Grant(goCtx context.Context, msg *authz.MsgGrant) (*authz.MsgGra
 	if err != nil {
 		return nil, err
 	}
-	// create the account if it is not in account state
-	granteeAcc := k.authKeeper.GetAccount(ctx, grantee)
-	if granteeAcc == nil {
-		granteeAcc = k.authKeeper.NewAccountWithAddress(ctx, grantee)
-		k.authKeeper.SetAccount(ctx, granteeAcc)
-	}
-
 	granter, err := sdk.AccAddressFromBech32(msg.Granter)
 	if err != nil {
 		return nil, err
 	}
 
-	authorization, err := msg.GetAuthorization()
-	if err != nil {
-		return nil, err
+	authorization := msg.GetAuthorization()
+	if authorization == nil {
+		return nil, sdkerrors.ErrUnpackAny.Wrap("Authorization is not present in the msg")
 	}
 	t := authorization.MsgTypeURL()
 	if k.router.HandlerByTypeURL(t) == nil {

@@ -8,14 +8,14 @@ order: 13
 
 ## Prerequisite Readings
 
-* [In-Place Store Migration](../core/upgrade.md) {prereq}
+- [In-Place Store Migration](../core/upgrade.md) {prereq}
 
 ## Consensus Version
 
 Successful upgrades of existing modules require each `AppModule` to implement the function `ConsensusVersion() uint64`.
 
-* The versions must be hard-coded by the module developer.
-* The initial version **must** be set to 1.
+- The versions must be hard-coded by the module developer.
+- The initial version **must** be set to 1.
 
 Consensus versions serve as state-breaking versions of app modules and must be incremented when the module introduces breaking changes.
 
@@ -45,12 +45,12 @@ Since these migrations are functions that need access to a Keeper's store, use a
 
 ## Writing Migration Scripts
 
-To define the functionality that takes place during an upgrade, write a migration script and place the functions in a `migrations/` directory. For example, to write migration scripts for the bank module, place the functions in `x/bank/migrations/`. Use the recommended naming convention for these functions. For example, `v043bank` is the script that migrates the package `x/bank/migrations/v043`:
+To define the functionality that takes place during an upgrade, write a migration script. Since migration scripts manipulate legacy code, place these functions in a `legacy/` directory. For example, to write migration scripts for the bank module, place the functions in `x/bank/legacy/`. Use the recommended naming convention for these functions. For example, `v043bank` is the script that migrates this legacy package `x/bank/legacy/v043`:
 
 ```golang
 // Migrating bank module from version 1 to 2
 func (m Migrator) Migrate1to2(ctx sdk.Context) error {
-	return v043bank.MigrateStore(ctx, m.keeper.storeKey) // v043bank is package `x/bank/migrations/v043`.
+	return v043bank.MigrateStore(ctx, m.keeper.storeKey) // v043bank is package `x/bank/legacy/v043`.
 }
 ```
 
